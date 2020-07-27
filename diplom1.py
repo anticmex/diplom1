@@ -154,7 +154,7 @@ class Yaload:
         elif question_to_user == 'n':
             folder_name = ''
         else:
-            folder_name = 'Временная'
+            folder_name = 'Временная/'
         return folder_name
 
     # def files_select(self, file_full_path):
@@ -171,7 +171,7 @@ class Yaload:
         disk_folders_request = requests.get(self.BASE_URL + self.BAS_STRUCTURE_URL,
                                             params=self.DISK_ROOT, headers=self.AUTHOR)
         # выбор папки на Ядиске
-        self.disk_folder_upload_name = "/" + self.folder_selection(disk_folders_request.json()) + "/"
+        self.disk_folder_upload_name = "/" + self.folder_selection(disk_folders_request.json())
         print(f'Выбрана папка для загрузки: "{self.disk_folder_upload_name}"')
 
         for ldict in tqdm(list_of_dictions, desc='Загрузка файлов на Ядиск'):
