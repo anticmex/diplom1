@@ -13,89 +13,18 @@ class VkApi:
         self.params = {'access_token': token}
         self.base_url = 'https://api.vk.com/method/'
 
-    def __main_url__(self, vk_method):
-        # создание базовой URL для VK API
-
-        return self.base_url + vk_method
-
-    def alternative_mutual_friends_finder(self, source_uid, target_uid):
-        # Попытка поиска общих друзей в случае если токен пользователя не позволяет получить доступ к просмотру
-        # общих друзей запрошенных Юзеров.
-
-        user1_friends = set(self.friends_list(source_uid, 0)['response']['items'])
-        user2_friends = set(self.friends_list(target_uid, 0)['response']['items'])
-
-        id_list = []
-        for ids in user1_friends & user2_friends:
-            id_list.append(ids)
-
-        return f'Список общих друзей пользователя {source_uid} и {target_uid} следующий:\n' \
-               f'{self.id_to_name_convertor(id_list)}'
-
-    def friends_list(self, user_id, cheker=1):
-        # метод определяющий список друзей пользователя(по user_id)
-
-        self.request_friends = requests.get(
-            f'{self.__main_url__("friends.get")}?user_id={user_id}&v=5.21',
-            params=self.params
-        )
-        if cheker == 0:
-            return self.request_friends.json()
-        else:
-            id_list = self.request_friends.json()['response']['items']
-
-            return f'Список друзей пользователя {user_id} следующий:\n {self.id_to_name_convertor(id_list)}'
-
-    def mutual_friends(self, source_uid, target_uid):
-        # метод определяющий список общий друзей пользователя(по user_id) и пользователя чей токен применен
-
-        self.mutual_friends = requests.get(
-            f'{self.__main_url__("friends.getMutual")}'
-            f'?source_uid={source_uid}&target_uid={target_uid}&v=5.21',
-            params=self.params
-        )
-
-        if 'error' in self.mutual_friends.json():
-            return self.alternative_mutual_friends_finder(source_uid, target_uid)
-        else:
-            id_list = self.mutual_friends.json()['response']
-            print(id_list)
-            return f'Список общих друзей пользователя {source_uid} и {target_uid} следующий:\n ' \
-                   f'{self.id_to_name_convertor(id_list)}'
-
-    def id_to_name_convertor(self, *user_id):
-        # позволяет узнать человекочитаемое имя пользователя по его ID vk. и отображение в более-менее красивом виде.
-
-        usersid_name = {}
-
-        if isinstance(user_id[0], list):
-            user_id = user_id[0]
-
-        for id in tqdm(user_id):
-            req = requests.get(
-                f'https://api.vk.com/method/users.get?user_ids={id}&v=5.120',
-                params={'access_token': self.token}
-            )
-
-            if not 'error' in req.json():
-                usersid_name['id' + str(id)] = req.json()['response'][0]['first_name'] + \
-                                               " " + \
-                                               req.json()['response'][0]['last_name']
-
-            else:
-                time.sleep(4)
-
-        return usersid_name
-
-    def vkuser_photoget(self, *user_id):
+    def vk_user_photo_get(self, *user_id):
         for id in tqdm(user_id, desc=f'Обработка страницы пользователя.'):
-            photoget = requests.get(
+            photo_get = requests.get(
                 f'https://api.vk.com/method/photos.get?owner_id={id}&'
                 f'&album_id=profile&extended=1&photo_sizes=1&v=5.77',
                 params={'access_token': self.token}
             )
+        if 'error' in photo_get.json():
 
-        return self.best_photo_get(photoget)
+            return 0
+        else:
+            return self.best_photo_get(photo_get)
 
     def best_photo_get(self, json_request):
         output_list = []
@@ -133,13 +62,6 @@ class Yaload:
         self.BASE_UPLOAD_URL = self.BAS_STRUCTURE_URL + '/upload'
         self.DISK_ROOT = {'path': '/'}
 
-    def get_filename_from_path(self, file_name):
-
-        for i, word in enumerate(reversed(file_name)):
-            if word == '/':
-                break
-        return file_name[len(file_name) - i:]
-
     def folder_selection(self, json_list):
         folder_list = []
         for items in json_list['_embedded']['items']:
@@ -150,18 +72,18 @@ class Yaload:
         question_to_user = \
             input("'y'- да, выбрать; 'n' - нет, загрузить в корень; 'иное' - создать временную папку для загрузки.")
         if question_to_user == 'y':
-            folder_name = input("Укажите название папки: ")
+            folder_name = f'{input("Укажите название папки: ")}/'
+            if not folder_name in items['name']:
+                print(f"Создаем папку {folder_name}.")
+                requests.put(self.BASE_URL + self.BAS_STRUCTURE_URL,
+                             params={'path': folder_name}, headers=self.AUTHOR)
         elif question_to_user == 'n':
             folder_name = ''
         else:
             folder_name = 'Временная/'
+
         return folder_name
 
-    # def files_select(self, file_full_path):
-    #
-    #     self.full_path_filename = file_full_path
-    #     filename = self.get_filename_from_path(self.full_path_filename)
-    #     return filename
 
     def loading_process(self, list_of_dictions):
 
@@ -174,14 +96,14 @@ class Yaload:
         self.disk_folder_upload_name = "/" + self.folder_selection(disk_folders_request.json())
         print(f'Выбрана папка для загрузки: "{self.disk_folder_upload_name}"')
 
-        for ldict in tqdm(list_of_dictions, desc='Загрузка файлов на Ядиск'):
+        for list_of_dicts in tqdm(list_of_dictions, desc='Загрузка файлов на Ядиск'):
             statistic_data = {}
-            uploading_filename = str(ldict['position']) + "_" + ldict['name']
-            uploading_fileurl = ldict['url']
+            uploading_filename = str(list_of_dicts['position']) + "_" + list_of_dicts['name']
+            uploading_file_url = list_of_dicts['url']
 
-            self.upload_file(self.disk_folder_upload_name, uploading_fileurl, uploading_filename)
+            self.upload_file(self.disk_folder_upload_name, uploading_file_url, uploading_filename)
             statistic_data['file_name'] = uploading_filename
-            statistic_data['size'] = str(ldict['height']) + "x" + str(ldict['width'])
+            statistic_data['size'] = str(list_of_dicts['height']) + "x" + str(list_of_dicts['width'])
             statistic_list.append(statistic_data)
 
         return self.statistic_upload(self.disk_folder_upload_name, statistic_list)
@@ -219,14 +141,15 @@ class Yaload:
 
 
 def main():
-    vktoken = input("Введите токен для работы с VK: ")
-    yatoken = input("Введите токен для работы с Яндекс-диском: ")
+    vk_token = input("Введите токен для работы с VK: ")
+    ya_token = input("Введите токен для работы с Яндекс-диском: ")
     vk_user_id = input("Укажите id пользователя ВК для загрузки фото: ")
 
 
-    photo_listofdicts = VkApi(vktoken).vkuser_photoget(vk_user_id)
-    if len(photo_listofdicts) > 0:
-        Yaload(yatoken).loading_process(photo_listofdicts)
+    photo_list_of_dicts = VkApi(vk_token).vk_user_photo_get(vk_user_id)
+
+    if photo_list_of_dicts != 0:
+        Yaload(ya_token).loading_process(photo_list_of_dicts)
         print("Успешное завершение работы!")
 
     else:
